@@ -2,6 +2,11 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./style.css";
 
+const emailJsServiceId = import.meta.env.VITE_EMAILJS_SERVICE_ID as string | undefined;
+const emailJsTemplateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID as string | undefined;
+const emailJsPublicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY as string | undefined;
+const complaintRecipient = "atchayam265@gmail.com";
+
 type Location = {
   name: string;
   city: string;
@@ -224,10 +229,9 @@ function renderSitesPage(filter: "all" | "official" | "illegal" = "all"): void {
   const shown = chennaiAreas.filter((area) => filter === "all" || area.category === (filter === "official" ? "legal" : "illegal"));
   app.innerHTML = `<div class="app-shell">${dashboardSidebar("sites")}<main class="dashboard page-dashboard">
     <div class="page-title-row"><div><p class="eyebrow">CHENNAI / SITE DIRECTORY</p><h1>Waste Sites</h1><p class="muted">Official disposal locations and reported dumping areas.</p></div><button class="soft-button" id="sites-map-button">⌖ View map</button></div>
-    <section class="panel sites-panel"><div class="site-tabs"><button data-filter="official" class="${filter === "official" ? "selected" : ""}">Official Sites <b>2</b></button><button data-filter="illegal" class="${filter === "illegal" ? "selected" : ""}">Reported Locations <b>12</b></button><button data-filter="all" class="${filter === "all" ? "selected" : ""}">All Sites <b>14</b></button><label class="table-search">⌕ <input id="site-search" placeholder="Search sites..." /></label></div>
+    <section class="panel sites-panel"><div class="site-tabs"><button data-filter="all" class="${filter === "all" ? "selected" : ""}">All Sites <b>14</b></button><button data-filter="official" class="${filter === "official" ? "selected" : ""}">Official Sites <b>2</b></button><button data-filter="illegal" class="${filter === "illegal" ? "selected" : ""}">Reported Locations <b>12</b></button><label class="table-search">⌕ <input id="site-search" placeholder="Search sites..." /></label></div>
     <div class="responsive-table"><table><thead><tr><th>#</th><th>Location</th><th>Approx. latitude</th><th>Approx. longitude</th><th>Reported waste types</th><th>Status</th><th>Action</th></tr></thead><tbody id="site-table-body">${siteTableRows(shown)}</tbody></table></div>
-    <div class="pagination"><button disabled>‹</button><button class="current">1</button><button>2</button><button>3</button><button>›</button></div></section>
-    <p class="source-note page-note">Coordinates are approximate report locations. Site area has not been measured in GIS; all illegal dumping candidates require field verification.</p>
+    </section>
     ${sourceLinksMarkup()}
   </main></div>`;
   bindAppNav();
@@ -295,9 +299,32 @@ function renderSiteDetail(area: ChennaiArea): void {
     <section class="panel detail-description"><h3>Report description</h3><p>${area.detail}</p><small class="source-note">${area.sourceUrl ? `Supporting report: <a href="${area.sourceUrl}" target="_blank" rel="noreferrer">${area.source}</a> · ${area.updated}` : `Source: ${area.source ?? area.updated}`}. Reported location only; exact dumping boundary and waste classification need field verification.</small><div class="detail-classification"><b>Suggested model label</b><span>Illegal dumping candidate</span><small>Do not infer individual materials from satellite imagery alone.</small></div></section>
   </main></div>`;
   bindAppNav();
+  if (area.category === "illegal") {
+    document.querySelector("main")?.insertAdjacentHTML("beforeend", `<section class="panel resolution-panel"><div class="resolution-heading"><div><p class="eyebrow">RESPONSE PLAYBOOK</p><h2>How to solve this reported issue</h2><p>Use this workflow to turn an unverified report into a safe, documented cleanup action.</p></div><span class="resolution-status">Needs verification</span></div><div class="resolution-steps"><article><span>1</span><div><b>Verify on site</b><small>Confirm the location, take dated photos and record the waste type and approximate area.</small></div></article><article><span>2</span><div><b>Coordinate cleanup</b><small>Send the evidence to the local body or authorized waste contractor for removal and safe disposal.</small></div></article><article><span>3</span><div><b>Prevent recurrence</b><small>Add signage, improve collection access and revisit the site after cleanup to check for re-dumping.</small></div></article></div></section><section class="panel site-yearly-panel"><div class="site-yearly-heading"><div><p class="eyebrow">SITE HISTORY</p><h2>Yearly comparison</h2><p>Compare estimated waste-footprint change for this reported location.</p></div><button id="site-yearly-button" class="compare-button">Choose years</button></div><div id="site-yearly-controls"></div></section>`);
+  }
+  document.querySelector(".site-area-legend")?.remove();
+  document.querySelector(".resolution-status")?.remove();
+  const factRows = document.querySelectorAll<HTMLElement>(".detail-facts .fact-row");
+  if (factRows[2]) {
+    factRows[2].querySelector("b")!.innerHTML = area.category === "legal" ? "♧ &nbsp;Official site area" : "♧ &nbsp;Reported area";
+    factRows[2].querySelector("span")!.textContent = area.category === "legal" ? area.extent : "Approximate location";
+  }
+  if (factRows[5]) {
+    factRows[5].querySelector("b")!.innerHTML = area.category === "legal" ? "▣ &nbsp;Site record" : "▣ &nbsp;Source update";
+    factRows[5].querySelector("span")!.textContent = area.updated;
+  }
+  document.querySelector(".detail-classification")?.remove();
+  const sourceNote = document.querySelector<HTMLElement>(".source-note");
+  if (sourceNote) sourceNote.innerHTML = area.sourceUrl ? `Supporting report: <a href="${area.sourceUrl}" target="_blank" rel="noreferrer">${area.source}</a> · ${area.updated}` : `Source: ${area.source ?? area.updated}`;
+  factRows[0]?.remove();
+  document.querySelectorAll<HTMLButtonElement>(".thumb").forEach((button) => {
+    if (button.textContent?.trim() === "Location") button.remove();
+  });
   document.querySelector<HTMLButtonElement>("#back-sites")!.onclick = () => renderSitesPage("all");
   const detailMap = L.map("detail-map", { zoomControl: false }).setView(area.coordinates, 14); map = detailMap;
-  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { attribution: "Tiles © Esri", maxZoom: 19 }).addTo(detailMap);
+  const satelliteLayer = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { attribution: "Tiles © Esri", maxZoom: 19 });
+  const streetLayer = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap contributors", maxZoom: 19 });
+  satelliteLayer.addTo(detailMap);
   const mappedWasteBoundary = area.neighborhood === "Perungudi / Pallikaranai"
     ? perungudiDumpyardBoundary
     : area.neighborhood === "Kodungaiyur"
@@ -318,6 +345,22 @@ function renderSiteDetail(area: ChennaiArea): void {
     }).bindTooltip(`${area.neighborhood} · mapped landfill perimeter`).addTo(detailMap);
     detailMap.fitBounds(boundary.getBounds(), { padding: [18, 18] });
   }
+  document.querySelectorAll<HTMLButtonElement>(".thumb").forEach((button, index) => {
+    button.dataset.mapView = ["satellite", "street", "location"][index];
+    button.onclick = () => {
+      const view = button.dataset.mapView;
+      if (view === "street") {
+        satelliteLayer.remove();
+        streetLayer.addTo(detailMap);
+      } else {
+        streetLayer.remove();
+        satelliteLayer.addTo(detailMap);
+        if (view === "location") detailMap.setView(area.coordinates, 17, { animate: true });
+      }
+      document.querySelectorAll<HTMLButtonElement>("[data-map-view]").forEach((item) => item.classList.toggle("selected", item === button));
+    };
+  });
+  document.querySelector<HTMLButtonElement>("#site-yearly-button")?.addEventListener("click", () => showYearControls(area, "#site-yearly-controls"));
 }
 
 function renderDashboard(): void {
@@ -336,16 +379,14 @@ function renderDashboard(): void {
         <section class="welcome-row"><div><p class="eyebrow">GEO WASTE INTELLIGENCE · CHENNAI</p><h1>Welcome back, Chennai</h1><p class="muted">Here’s your city waste monitoring overview.</p></div><div class="welcome-mark"><span>🌿</span><div><b>GeoWasteAI</b><small>Satellite monitoring active</small></div></div></section>
         <section class="stat-strip dashboard-stats">${statCard("⌖", "14", "Locations in registry", "green")}${statCard("◉", "2", "Official disposal sites", "olive")}${statCard("△", "12", "Reported candidates", "red")}${statCard("✦", "5", "Priority study areas", "lime")}</section>
         <section class="dashboard-main-grid">
-          <article class="panel dashboard-card waste-trend-card"><div class="card-heading"><div><h2>Recommended study areas</h2><p>Initial locations suggested for model development</p></div><span class="model-badge">Priority 5</span></div><div class="focus-area-list">${["Gerugambakkam", "Perumbakkam Lake", "Nolambur", "Mogappair West", "Cowl Bazaar"].map((name, index) => { const area = chennaiAreas.find((item) => item.neighborhood === name)!; return `<div class="focus-area-row"><span>${String(index + 1).padStart(2, "0")}</span><div><b>${name}</b><small>${area.wasteTypes?.slice(0, 2).join(" · ")}</small></div><i class="focus-arrow">↗</i></div>`; }).join("")}</div><div class="chart-footnote"><span><i></i>Study priority from project research notes</span><button class="text-link" id="model-guide-link">Model guide →</button></div></article>
+          <article class="panel dashboard-card waste-trend-card"><div class="card-heading"><div><h2>Priority areas to report</h2><p>Locations needing follow-up for increased dumping</p></div><span class="model-badge">Report 5</span></div><div class="focus-area-list">${["Gerugambakkam", "Perumbakkam Lake", "Nolambur", "Mogappair West", "Cowl Bazaar"].map((name, index) => { const area = chennaiAreas.find((item) => item.neighborhood === name)!; return `<div class="focus-area-row"><span>${String(index + 1).padStart(2, "0")}</span><div><b>${name}</b><small>${area.wasteTypes?.slice(0, 2).join(" · ")} · rising concern</small></div><i class="focus-arrow">↗</i></div>`; }).join("")}</div></article>
           <article class="panel dashboard-card distribution-card"><div class="card-heading"><div><h2>Site distribution</h2><p>Chennai monitoring registry</p></div><span class="card-more">•••</span></div><div class="site-donut"><div><b>14</b><small>Locations listed</small></div></div><div class="distribution-legend"><span><i class="legend-dot legal"></i>Official disposal sites <b>2</b></span><span><i class="legend-dot illegal"></i>Reported candidates <b>12</b></span></div><div class="distribution-note">All reported candidate areas require field verification.</div></article>
-          <article class="panel dashboard-card waste-category-card"><div class="card-heading"><div><h2>Reported waste types</h2><p>Mentions across supplied location reports</p></div><span class="model-badge">6 categories</span></div><div class="reported-type-list">${categoryMentions.map((category) => `<div class="reported-type-row"><span class="type-color ${category.color}"></span><b>${category.name}</b><span class="type-count">${category.count} ${category.count === 1 ? "location" : "locations"}</span><div class="type-meter"><i class="${category.color}" style="width:${Math.max(8, (category.count / 12) * 100)}%"></i></div></div>`).join("")}</div><p class="category-footnote">Categories may overlap. These are report mentions, not AI-confirmed material classifications.</p></article>
-          <article class="panel dashboard-card detection-guidance-card"><div class="card-heading"><div><h2>Satellite detection potential</h2><p>Initial model guidance from project research</p></div><button class="text-link" id="dashboard-guide-link">Full guide <span>→</span></button></div><div class="potential-summary"><div class="potential-summary-row"><span class="potential high">High</span><b>Construction waste</b><small>Concrete, bricks, tiles, rubble</small></div><div class="potential-summary-row"><span class="potential medium">Medium</span><b>Plastic · mixed · furniture</b><small>Visible accumulation and surface patterns</small></div><div class="potential-summary-row"><span class="potential low">Low–Medium</span><b>Organic · biomedical</b><small>Material identity needs field confirmation</small></div></div><div class="model-warning"><b>Model focus</b><span>Detect accumulation zones first. Satellite imagery cannot reliably identify every individual waste material.</span></div></article>
+          <article class="panel dashboard-card waste-category-card"><div class="card-heading"><div><h2>Reported waste types</h2><p>Waste categories recorded in reports</p></div><span class="model-badge">6 categories</span></div><div class="reported-type-list">${categoryMentions.map((category) => `<div class="reported-type-row"><span class="type-color ${category.color}"></span><b>${category.name}</b><span class="type-count">${category.count} ${category.count === 1 ? "location" : "locations"}</span><div class="type-meter"><i class="${category.color}" style="width:${Math.max(8, (category.count / 12) * 100)}%"></i></div></div>`).join("")}</div></article>
+          <article class="panel dashboard-card detection-guidance-card"><div class="card-heading"><div><h2>What to include in a report</h2><p>Help response teams verify and act quickly</p></div></div><div class="potential-summary"><div class="potential-summary-row"><span class="potential high">1</span><b>Exact location</b><small>Neighbourhood, landmark or coordinates</small></div><div class="potential-summary-row"><span class="potential medium">2</span><b>Dated evidence</b><small>Photos or satellite reference with the date</small></div><div class="potential-summary-row"><span class="potential low">3</span><b>Waste details</b><small>Type, approximate size and nearby risk</small></div></div><div class="model-warning"><b>Next step</b><span>Submit the report for field verification and cleanup coordination.</span></div></article>
         </section>
       </main>
     </div>`;
   bindAppNav();
-  document.querySelector<HTMLButtonElement>("#model-guide-link")!.onclick = renderAnalyticsPage;
-  document.querySelector<HTMLButtonElement>("#dashboard-guide-link")!.onclick = renderAnalyticsPage;
 }
 
 function statCard(symbol: string, value: string, label: string, color: string, suffix = ""): string {
@@ -354,33 +395,24 @@ function statCard(symbol: string, value: string, label: string, color: string, s
 
 function renderMapPage(): void {
   app.innerHTML = `<div class="app-shell">${dashboardSidebar("map")}<main class="dashboard page-dashboard map-page">
-    <div class="page-title-row map-page-heading"><div><p class="eyebrow">CHENNAI / SATELLITE EXPLORER</p><h1>Explore an area over time</h1><p class="muted">Search a Chennai place, inspect its boundary and browse archived satellite imagery.</p></div></div>
+    <div class="page-title-row map-page-heading"><div><p class="eyebrow">CHENNAI / SATELLITE EXPLORER</p><h1>Explore Chennai</h1><p class="muted">Search a Chennai place and inspect its boundary and registered site locations.</p></div></div>
     <section class="map-explorer-controls"><form id="place-search-form" class="map-place-search"><span>⌕</span><input id="map-search" autocomplete="off" placeholder="Search a neighbourhood or place in Chennai" aria-label="Search a place in Chennai"><button>Search</button></form>
-      <label class="map-year-select">Imagery release<select id="map-year"><option value="current">Latest imagery</option><option value="2015">2015</option><option value="2018">2018</option><option value="2020">2020</option><option value="2024">2024</option></select></label>
-      <label class="map-compare-toggle"><input id="map-compare" type="checkbox"> Compare two years</label>
-      <div class="map-year-select compare-year-select" hidden><label>Compare with<select id="compare-year"><option value="2015">2015</option><option value="2018">2018</option><option value="2020" selected>2020</option><option value="2024">2024</option></select></label></div>
-    </section><div id="place-search-status" class="map-status" aria-live="polite">Showing Chennai. Search a place to outline its mapped boundary.</div>
-    <div class="map-filter-row"><b>Site markers</b><div class="map-filters"><button class="selected" data-map-filter="all">All</button><button data-map-filter="legal">Official</button><button data-map-filter="illegal">Reported candidates</button></div><span>Markers show registry locations; they do not represent verified detections for the selected year.</span></div>
+    </section><div id="place-search-status" class="map-status" aria-live="polite">Chennai outline and registry locations shown.</div>
+    <div class="map-filter-row"><b>Site markers</b><div class="map-filters"><button class="selected" data-map-filter="all">All</button><button data-map-filter="legal">Official</button><button data-map-filter="illegal">Reported candidates</button></div></div>
     <div id="map-stage" class="map-stage explorer-stage"><div id="full-map"></div><div id="map-tile-warning" class="map-tile-warning" hidden></div><div class="map-legend-card"><b>Map legend</b><span><i class="legend-dot legal"></i>Official facility location</span><span><i class="legend-dot illegal"></i>Reported candidate coordinate</span><span class="boundary-legend"><i></i>Selected place boundary</span><small>Markers show registered locations only. No waste patch is outlined without a verified polygon.</small></div></div>
-    <div class="imagery-note"><b>About historical imagery</b><span>Years refer to Esri Wayback basemap release dates, not necessarily the capture date of every image tile. Historical waste markers are not inferred without dated, validated detections.</span><a href="https://livingatlas.arcgis.com/wayback/" target="_blank" rel="noreferrer">Esri Wayback details ↗</a></div>
+    <div class="imagery-note"><span>For reference, explore <a href="https://livingatlas.arcgis.com/wayback/?utm_source=chatgpt.com" target="_blank" rel="noreferrer">Esri Wayback – Historical Satellite Imagery</a>.</span></div>
   </main></div>`;
   bindAppNav();
 
-  type WaybackRelease = { year: number; date: string; id: string };
   type PlaceResult = { display_name: string; lat: string; lon: string; boundingbox: string[]; geojson?: GeoJSON.GeoJsonObject };
   const stage = document.querySelector<HTMLDivElement>("#map-stage")!;
   const status = document.querySelector<HTMLDivElement>("#place-search-status")!;
   const search = document.querySelector<HTMLInputElement>("#map-search")!;
-  const currentYear = document.querySelector<HTMLSelectElement>("#map-year")!;
-  const compareToggle = document.querySelector<HTMLInputElement>("#map-compare")!;
-  const compareWrap = document.querySelector<HTMLDivElement>(".compare-year-select")!;
-  const compareYear = document.querySelector<HTMLSelectElement>("#compare-year")!;
   let filter: "all" | "legal" | "illegal" = "all";
   let placeCenter: [number, number] = [13.0827, 80.245];
   let placeBounds: [[number, number], [number, number]] = [[12.85, 80.10], [13.22, 80.33]];
   let boundary: GeoJSON.GeoJsonObject | undefined;
   let placeLabel = "Chennai";
-  let releases: WaybackRelease[] = [];
   let compareMaps: L.Map[] = [];
   let mainMap: L.Map | undefined;
   const markerLayer = () => {
@@ -389,26 +421,16 @@ function renderMapPage(): void {
     chennaiAreas.filter((area) => selectedBounds.contains(area.coordinates) && (filter === "all" || area.category === filter)).forEach((area) => {
       const legal = area.category === "legal";
       L.circleMarker(area.coordinates, { radius: legal ? 9 : 7, color: "#fff", fillColor: legal ? "#26833b" : "#e83e35", fillOpacity: .98, weight: 2 })
-        .bindTooltip(`<b>${area.neighborhood}</b><br>${legal ? "Official facility location · no current waste footprint mapped" : `Reported candidate coordinate · ${area.coordinates[0].toFixed(4)}, ${area.coordinates[1].toFixed(4)} · verify`}`)
+        .bindTooltip(`<b>${area.neighborhood}</b><br>${legal ? "Official facility location" : `Reported candidate coordinate · ${area.coordinates[0].toFixed(4)}, ${area.coordinates[1].toFixed(4)}`}`)
         .addTo(group);
     });
     return group;
   };
-  const boundaryLayer = () => boundary ? L.geoJSON(boundary, { style: { color: "#f8fff1", weight: 4, opacity: 1, fillColor: "#93d347", fillOpacity: .06, dashArray: "8 5" } }) : L.layerGroup();
-  const releaseForYear = (year: number): WaybackRelease | undefined => releases.filter((release) => release.year === year).sort((a, b) => b.date.localeCompare(a.date))[0];
-  const imageryLayer = (year: number | "current"): L.TileLayer => {
-    if (year === "current") return L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { attribution: "Tiles © Esri", maxZoom: 19 });
-    const release = releaseForYear(year);
-    if (!release) {
-      status.textContent = `No Esri Wayback release found for ${year} in the archive catalogue. Showing latest imagery.`;
-      return imageryLayer("current");
-    }
-    return L.tileLayer(`https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/${release.id}/{z}/{y}/{x}`, { attribution: `Imagery © Esri · Wayback release ${release.date}`, maxZoom: 19 });
-  };
-  const setMap = (element: string, year: number | "current"): L.Map => {
+  const boundaryLayer = () => boundary ? L.geoJSON(boundary, { style: { color: "#ffffff", weight: 4, opacity: 1, fillColor: "#93d347", fillOpacity: .06, dashArray: "8 5" } }) : L.layerGroup();
+  const setMap = (element: string): L.Map => {
     const next = L.map(element, { zoomControl: false }).fitBounds(placeBounds, { padding: [18, 18] });
     L.control.zoom({ position: "topleft" }).addTo(next);
-    const satellite = imageryLayer(year);
+    const satellite = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { attribution: "Tiles © Esri", maxZoom: 19 });
     let tileErrors = 0;
     let fallbackAdded = false;
     let tileLoaded = false;
@@ -418,7 +440,7 @@ function renderMapPage(): void {
     };
     const showOSMFallback = () => {
       const street = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "© OpenStreetMap contributors · satellite imagery unavailable",
+        attribution: "© OpenStreetMap contributors",
         maxZoom: 19,
       });
       let streetErrors = 0;
@@ -431,32 +453,13 @@ function renderMapPage(): void {
         if (streetErrors >= 2) warnTiles("Map imagery is blocked or offline. Registry markers remain available; reconnect to load map tiles.");
       });
       street.addTo(next);
-      status.textContent = "Satellite tiles could not be loaded. Trying the street map fallback.";
+      status.textContent = "Satellite tiles are unavailable; showing the street map instead.";
     };
     const showStreetFallback = () => {
       if (fallbackAdded || tileLoaded || !next.hasLayer(satellite)) return;
       fallbackAdded = true;
       satellite.remove();
-      if (year === "current") { showOSMFallback(); return; }
-      const latestSatellite = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-        attribution: "Tiles © Esri · latest imagery shown because the selected archive release is unavailable",
-        maxZoom: 19,
-      });
-      let latestErrors = 0;
-      latestSatellite.on("tileload", () => {
-        const warning = document.querySelector<HTMLDivElement>("#map-tile-warning");
-        if (warning) warning.hidden = true;
-        status.textContent = `The ${year} archive tiles are unavailable here. Showing the latest satellite imagery instead.`;
-      });
-      latestSatellite.on("tileerror", () => {
-        latestErrors += 1;
-        if (latestErrors >= 3 && next.hasLayer(latestSatellite)) {
-          latestSatellite.remove();
-          showOSMFallback();
-        }
-      });
-      latestSatellite.addTo(next);
-      status.textContent = `The ${year} archive tiles could not be loaded. Trying the latest satellite imagery…`;
+      showOSMFallback();
     };
     satellite.on("tileload", () => { tileLoaded = true; tileErrors = 0; });
     satellite.on("tileerror", () => {
@@ -476,35 +479,10 @@ function renderMapPage(): void {
     mainMap = undefined;
     compareMaps = [];
     map = undefined;
-    if (compareToggle.checked) {
-      const firstYear = currentYear.value === "current" ? 2024 : Number(currentYear.value);
-      stage.innerHTML = `<div class="comparison-map-grid"><section><header>${placeLabel} · ${firstYear}</header><div id="compare-map-a"></div></section><section><header>${placeLabel} · ${compareYear.value}</header><div id="compare-map-b"></div></section></div><div id="map-tile-warning" class="map-tile-warning" hidden></div><div class="map-legend-card"><b>Map legend</b><span><i class="legend-dot legal"></i>Official facility location</span><span><i class="legend-dot illegal"></i>Reported candidate coordinate</span><span class="boundary-legend"><i></i>Selected place boundary</span><small>Markers show registered locations only. No waste patch is outlined without a verified polygon.</small></div>`;
-      compareMaps = [setMap("compare-map-a", firstYear), setMap("compare-map-b", Number(compareYear.value))];
-      map = compareMaps[0];
-    } else {
-      stage.innerHTML = `<div id="full-map"></div><div id="map-tile-warning" class="map-tile-warning" hidden></div><div class="map-legend-card"><b>Map legend</b><span><i class="legend-dot legal"></i>Official facility location</span><span><i class="legend-dot illegal"></i>Reported candidate coordinate</span><span class="boundary-legend"><i></i>Selected place boundary</span><small>Markers show registered locations only. No waste patch is outlined without a verified polygon.</small></div>`;
-      mainMap = setMap("full-map", currentYear.value === "current" ? "current" : Number(currentYear.value)); map = mainMap;
-    }
-    if (boundary) status.textContent = `${placeLabel} · boundary loaded from OpenStreetMap place data. Registry locations are contextual markers, not year-specific AI detections.`;
-    else status.textContent = `${placeLabel} · no boundary polygon was provided by place search; showing the selected location and registry markers.`;
-  };
-  const loadReleases = async () => {
-    try {
-      const response = await fetch("https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/WMTS/1.0.0/WMTSCapabilities.xml");
-      if (!response.ok) throw new Error("Archive catalogue unavailable");
-      const xml = new DOMParser().parseFromString(await response.text(), "application/xml");
-      releases = Array.from(xml.getElementsByTagNameNS("*", "Layer")).flatMap((layer) => {
-        const title = layer.getElementsByTagNameNS("*", "Title")[0]?.textContent ?? "";
-        const id = layer.getElementsByTagNameNS("*", "Identifier")[0]?.textContent ?? "";
-        const date = title.match(/(20\d{2})[-–](\d{2})[-–](\d{2})/);
-        return date && id ? [{ year: Number(date[1]), date: date[0].replace("–", "-"), id }] : [];
-      });
-      if (!releases.length) throw new Error("No dated archive releases found");
-      status.textContent = "Historical imagery archive connected. Choose a year to load its nearest published release.";
-      if (currentYear.value !== "current") renderMaps();
-    } catch {
-      status.textContent = "Historical imagery catalogue could not be reached. Check the connection or use latest imagery.";
-    }
+    stage.innerHTML = `<div id="full-map"></div><div id="map-tile-warning" class="map-tile-warning" hidden></div><div class="map-legend-card"><b>Map legend</b><span><i class="legend-dot legal"></i>Official facility location</span><span><i class="legend-dot illegal"></i>Reported candidate coordinate</span><span class="boundary-legend"><i></i>Selected place boundary</span><small>Markers show registered locations only. No waste patch is outlined without a verified polygon.</small></div>`;
+    mainMap = setMap("full-map"); map = mainMap;
+    if (boundary) status.textContent = `${placeLabel} · boundary loaded from OpenStreetMap place data.`;
+    else status.textContent = `${placeLabel} · showing the selected location and registry markers.`;
   };
   const geocode = async (query: string) => {
     const local = chennaiAreas.find((area) => `${area.name} ${area.neighborhood}`.toLowerCase().includes(query.toLowerCase()));
@@ -544,37 +522,96 @@ function renderMapPage(): void {
     filter = button.dataset.mapFilter as "all" | "legal" | "illegal";
     document.querySelectorAll("[data-map-filter]").forEach((item) => item.classList.toggle("selected", item === button)); renderMaps();
   });
-  currentYear.onchange = renderMaps;
-  compareYear.onchange = renderMaps;
-  compareToggle.onchange = () => { compareWrap.hidden = !compareToggle.checked; renderMaps(); };
-  renderMaps(); void loadReleases();
+  renderMaps();
 }
 
 function renderAnalyticsPage(): void {
-  app.innerHTML = `<div class="app-shell">${dashboardSidebar("analytics")}<main class="dashboard page-dashboard">
-    <div class="page-title-row"><div><p class="eyebrow">CHENNAI / INSIGHTS</p><h1>Waste Analysis</h1><p class="muted">Source-backed location data and AI planning guidance.</p></div></div>
-    <div class="analytics-grid"><section class="panel chart-panel priority-analytics"><h3>Recommended initial study areas</h3><p>Research priorities supplied for the first model study.</p><div class="focus-area-list">${["Gerugambakkam", "Perumbakkam Lake", "Nolambur", "Mogappair West", "Cowl Bazaar"].map((name, index) => { const area = chennaiAreas.find((item) => item.neighborhood === name)!; return `<div class="focus-area-row"><span>${String(index + 1).padStart(2, "0")}</span><div><b>${name}</b><small>${area.wasteTypes?.join(" · ")}</small></div><i class="priority-tag">PRIORITY</i></div>`; }).join("")}</div></section>
-      <section class="panel distribution-panel"><h3>Registry distribution</h3><div class="donut"><div><b>14</b><span>Locations</span></div></div><div class="donut-legend"><span><i class="legend-dot legal"></i>Official disposal sites (2)<b>14%</b></span><span><i class="legend-dot illegal"></i>Reported candidates (12)<b>86%</b></span></div></section></div>
-    <section class="analytics-metrics">${statCard("△", "12", "Reported candidates · verify", "red")}${statCard("◉", "2", "Official GCC sites", "green")}${statCard("✦", "5", "Priority study areas", "lime")}${statCard("⌖", "12", "Approx. coordinates supplied", "olive")}</section>
-    <section class="panel model-guide"><div class="model-guide-head"><div><p class="eyebrow">AI TRAINING GUIDE</p><h2>Waste categories &amp; satellite detection</h2><p>Start by locating waste accumulation and visible surface changes. Satellite imagery cannot reliably identify every individual material.</p></div><span class="model-badge">Candidate labels</span></div>
-      <div class="category-grid"><article><span class="category-symbol">▧</span><div><b>Plastic waste</b><small>Bags, bottles, packaging</small></div><em class="potential medium">Medium</em></article><article><span class="category-symbol">▤</span><div><b>Construction waste</b><small>Concrete, bricks, tiles, rubble</small></div><em class="potential high">High</em></article><article><span class="category-symbol">♧</span><div><b>Organic waste</b><small>Vegetables, food, garden waste</small></div><em class="potential low">Low–Medium</em></article><article><span class="category-symbol">◉</span><div><b>Mixed municipal waste</b><small>Household garbage, mixed refuse</small></div><em class="potential medium">Medium</em></article><article><span class="category-symbol">⌂</span><div><b>Furniture waste</b><small>Sofas, wood, mattresses</small></div><em class="potential medium">Medium</em></article><article><span class="category-symbol">＋</span><div><b>Biomedical waste</b><small>Medical waste, discarded materials</small></div><em class="potential low">Low–Medium</em></article></div>
-      <div class="model-caveat"><b>Imagery limitation</b><span>Use AI to flag possible accumulation areas and surface characteristics. Confirm waste type and site boundaries with field inspection.</span></div>
-      <div class="priority-study"><b>Recommended initial study areas</b><div>${["Gerugambakkam", "Perumbakkam Lake", "Nolambur", "Mogappair West", "Cowl Bazaar"].map((name, i) => `<span><i>${i + 1}</i>${name}</span>`).join("")}</div></div>
-      <div class="dataset-schema"><b>Suggested dataset fields</b><div><span>Site ID <code>ILG001</code></span><span>Location</span><span>Latitude / longitude</span><span>Waste type</span><span>Site status</span><span>Image date</span><span>GIS area</span><span>Classification <code>Illegal dumping candidate</code></span></div><small>Keep image acquisition date and measured area blank until known; do not fabricate satellite dates or GIS measurements.</small></div>
-    </section>
-    <p class="source-note page-note">No waste tonnage or GIS area measurements were supplied for these reported locations. Coordinates are approximate and status is “Requires verification.”</p>${sourceLinksMarkup()}
+  const reported = chennaiAreas.filter((area) => area.category === "illegal");
+  const categoryCounts = Array.from(new Set(reported.flatMap((area) => area.wasteTypes ?? [])))
+    .map((name) => ({ name, count: reported.filter((area) => area.wasteTypes?.includes(name)).length }))
+    .sort((a, b) => b.count - a.count);
+  const analyticsYears = ["2022", "2023", "2024", "2025", "2026"];
+  const annualAnalytics = analyticsYears.map((year) => ({
+    year,
+    reported: reported.filter((area) => area.updated.includes(year)).length,
+    official: chennaiAreas.filter((area) => area.category === "legal" && area.updated.includes(year)).length,
+  }));
+  const annualMax = Math.max(...annualAnalytics.flatMap((item) => [item.reported, item.official]), 1);
+  const chartX = (index: number) => 58 + index * 166;
+  const chartY = (value: number) => 205 - (value / annualMax) * 155;
+  const reportedPoints = annualAnalytics.map((item, index) => `${chartX(index)},${chartY(item.reported)}`).join(" ");
+  const officialPoints = annualAnalytics.map((item, index) => `${chartX(index)},${chartY(item.official)}`).join(" ");
+  const chartGrid = [0, 1, 2, 3, 4].map((step) => { const value = Math.round((annualMax * step) / 4); const y = chartY(value); return `<line x1="45" y1="${y}" x2="720" y2="${y}"/><text x="35" y="${y + 4}">${value}</text>`; }).join("");
+  const chartLabels = annualAnalytics.map((item, index) => `<text x="${chartX(index)}" y="238">${item.year}</text>`).join("");
+  const chartDots = (key: "reported" | "official", color: string) => annualAnalytics.map((item, index) => `<circle cx="${chartX(index)}" cy="${chartY(item[key])}" r="5" fill="${color}"><title>${item.year}: ${item[key]} ${key === "reported" ? "reported" : "official"} records</title></circle>`).join("");
+  const stackedMax = Math.max(...annualAnalytics.map((item) => item.reported + item.official), 1);
+  const priorityAreas = reported.filter((area) => area.priority);
+  app.innerHTML = `<div class="app-shell">${dashboardSidebar("analytics")}<main class="dashboard page-dashboard analytics-page">
+    <div class="page-title-row"><div><p class="eyebrow">CHENNAI / PROJECT ANALYTICS</p><h1>Waste Analytics</h1><p class="muted">A clear view of the locations, waste patterns and response priorities in the provided project information.</p></div></div>
+    <section class="analytics-metrics">${statCard("⌖", String(chennaiAreas.length), "Total locations", "green")}${statCard("△", String(reported.length), "Reported dumping areas", "red")}${statCard("◉", "2", "Official disposal sites", "olive")}${statCard("✦", String(priorityAreas.length), "Priority response areas", "lime")}</section>
+    <div class="analytics-chart-grid"><section class="panel analytics-line-card"><div class="analytics-card-heading"><div><p class="eyebrow">LAST 5 YEARS</p><h2>Records trend</h2><p>Reported and official records grouped by source update year.</p></div><span class="analytics-badge">2022–2026</span></div><div class="analytics-chart-legend"><span><i class="reported-line"></i>Reported areas</span><span><i class="official-line"></i>Official sites</span></div><svg class="analytics-line-chart" viewBox="0 0 760 260" role="img" aria-label="Line chart of reported and official records for the last five years">${chartGrid}<polyline points="${reportedPoints}" fill="none" stroke="#31b7bd" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><polyline points="${officialPoints}" fill="none" stroke="#69c96b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>${chartDots("reported", "#31b7bd")}${chartDots("official", "#69c96b")}${chartLabels}</svg></section>
+      <section class="panel analytics-stacked-card"><div class="analytics-card-heading"><div><p class="eyebrow">SECOND GRAPH</p><h2>Yearly site mix</h2><p>Reported and official records stacked by source year.</p></div></div><div class="analytics-chart-legend"><span><i class="reported-fill"></i>Reported areas</span><span><i class="official-fill"></i>Official sites</span></div><div class="analytics-stacked-bars">${annualAnalytics.map((item) => `<div class="analytics-stacked-column" title="${item.year}: ${item.reported} reported, ${item.official} official"><b>${item.reported + item.official}</b><div class="analytics-stacked-bar"><i class="reported-fill" style="height:${(item.reported / stackedMax) * 100}%"></i><i class="official-fill" style="height:${(item.official / stackedMax) * 100}%"></i></div><span>${item.year}</span></div>`).join("")}</div></section></div>
+    <div class="analytics-lower-grid"><section class="panel analytics-category-card"><div class="analytics-card-heading"><div><p class="eyebrow">WASTE PATTERNS</p><h2>Reported waste categories</h2><p>Recorded category mentions across reported locations.</p></div></div><div class="analytics-category-list">${categoryCounts.slice(0, 6).map((item, index) => `<div class="analytics-category-row"><span>${String(index + 1).padStart(2, "0")}</span><div><b>${item.name}</b><small>${item.count} recorded location${item.count === 1 ? "" : "s"}</small><div class="analytics-progress"><i style="width:${Math.max(12, (item.count / Math.max(categoryCounts[0]?.count ?? 1, 1)) * 100)}%"></i></div></div><strong>${item.count}</strong></div>`).join("")}</div></section>
+      <section class="panel analytics-priority-card"><div class="analytics-card-heading"><div><p class="eyebrow">RESPONSE PRIORITY</p><h2>Areas needing attention</h2><p>Priority areas marked in the supplied project records.</p></div></div><div class="analytics-priority-list">${priorityAreas.map((area, index) => `<div class="analytics-priority-row"><span>${String(index + 1).padStart(2, "0")}</span><div><b>${area.neighborhood}</b><small>${area.facilityType} · ${area.wasteTypes?.slice(0, 2).join(" · ")}</small></div><em>Priority</em></div>`).join("")}</div></section></div>
+    <section class="panel analytics-response-card"><div class="analytics-card-heading"><div><p class="eyebrow">RESPONSE WORKFLOW</p><h2>From report to action</h2><p>Practical steps for turning the supplied site information into coordinated field response.</p></div></div><div class="analytics-workflow"><article><span>01</span><b>Report</b><small>Record the site, location and waste categories.</small></article><i>→</i><article><span>02</span><b>Coordinate</b><small>Assign cleanup and responsible local teams.</small></article><i>→</i><article><span>03</span><b>Follow up</b><small>Revisit the area and update the site record.</small></article></div></section>
+    <p class="analytics-data-note"><b>Data note</b> All figures on this page are calculated from the information provided in the project registry and supporting reports.</p>${sourceLinksMarkup()}
   </main></div>`;
   bindAppNav();
 }
 
 function renderReportsPage(): void {
   app.innerHTML = `<div class="app-shell">${dashboardSidebar("reports")}<main class="dashboard page-dashboard">
-    <div class="page-title-row"><div><p class="eyebrow">CHENNAI / EXPORTS</p><h1>Generate Report</h1><p class="muted">Export the source-backed location register and research fields.</p></div></div>
+    <div class="page-title-row"><div><p class="eyebrow">CHENNAI / COMMUNITY REPORTING</p><h1>Report illegal dumping</h1><p class="muted">Share what you saw, where it happened and images so the complaint can be acted on.</p></div></div>
+    <section class="panel complaint-panel"><div class="complaint-heading"><div><p class="eyebrow">RAISE A COMPLAINT</p><h2>Send a waste-dumping report</h2></div><span class="complaint-icon">✉</span></div>
+      <form id="complaint-form" class="complaint-form"><label>Reported location<select id="complaint-location"><option value="">Choose a Chennai area</option>${chennaiAreas.map((item) => `<option value="${item.neighborhood}">${item.neighborhood}</option>`).join("")}<option value="Other">Other location</option></select></label><label>Other location (optional)<input id="complaint-custom-location" type="text" placeholder="Neighbourhood, landmark or coordinates" /></label><label class="full-width">What did you see?<textarea id="complaint-message" rows="5" placeholder="Describe the waste dumping, when you noticed it and any nearby landmark." required></textarea></label><label class="full-width">Add images (optional)<input id="complaint-images" name="waste_images" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple /><small class="field-help">You can attach multiple JPG, PNG, WEBP or GIF images, up to 10 MB each.</small></label><button class="generate-button complaint-submit" type="submit">✉ &nbsp;Raise complaint</button><p id="complaint-feedback" class="report-feedback full-width" aria-live="polite"></p></form>
+    </section>
     <section class="panel report-generator"><div class="report-art"><div class="report-leaf">🌿</div><svg viewBox="0 0 180 190" role="img" aria-label="Report illustration"><rect x="32" y="20" width="116" height="150" rx="12" fill="#fff" stroke="#246b32" stroke-width="8"/><rect x="72" y="8" width="36" height="20" rx="8" fill="#246b32"/><path d="M55 133h70M55 148h46" stroke="#8cbd83" stroke-width="7" stroke-linecap="round"/><path d="M57 115v-28h18v28m10 0V69h18v46m10 0V55h18v60" fill="#83c957"/></svg></div>
-      <form id="report-form" class="report-form"><label>Report Type<select id="report-type"><option>Waste Dumping Summary</option><option>Official Site Overview</option><option>Reported Location Register</option></select></label><label>Year<select id="report-year"><option>2025</option><option>2024</option><option>2023</option><option>2022</option></select></label><label>Location<select id="report-area"><option>All Chennai</option>${chennaiAreas.map((item) => `<option>${item.neighborhood}</option>`).join("")}</select></label><button class="generate-button">⇩ &nbsp;Generate Report</button><p id="report-feedback" class="report-feedback" aria-live="polite"></p></form></section>
+      <form id="report-form" class="report-form"><p class="eyebrow">EXPORT DATA</p><h2>Generate a project report</h2><label>Report Type<select id="report-type"><option>Waste Dumping Summary</option><option>Official Site Overview</option><option>Reported Location Register</option></select></label><label>Year<select id="report-year"><option>2025</option><option>2024</option><option>2023</option><option>2022</option></select></label><label>Location<select id="report-area"><option>All Chennai</option>${chennaiAreas.map((item) => `<option>${item.neighborhood}</option>`).join("")}</select></label><button class="generate-button">⇩ &nbsp;Generate Report</button><p id="report-feedback" class="report-feedback" aria-live="polite"></p></form></section>
     <section class="recent-reports"><h2>Recent Reports</h2><div id="recent-report-list"><article class="empty-report"><span class="empty-report-icon">▤</span><div><b>No reports generated yet</b><small>Generated CSV reports will appear here after download.</small></div></article></div></section>
   </main></div>`;
   bindAppNav();
+  document.querySelector<HTMLFormElement>("#complaint-form")!.onsubmit = async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget as HTMLFormElement;
+    const feedback = document.querySelector<HTMLParagraphElement>("#complaint-feedback")!;
+    const selectedLocation = document.querySelector<HTMLSelectElement>("#complaint-location")!.value;
+    const customLocation = document.querySelector<HTMLInputElement>("#complaint-custom-location")!.value.trim();
+    const message = document.querySelector<HTMLTextAreaElement>("#complaint-message")!.value.trim();
+    const location = customLocation || selectedLocation;
+    if (!location || !message) {
+      feedback.textContent = "Please add a location and describe what you saw.";
+      return;
+    }
+    const imageInput = document.querySelector<HTMLInputElement>("#complaint-images")!;
+    if (!emailJsServiceId || !emailJsTemplateId || !emailJsPublicKey) {
+      feedback.textContent = "EmailJS is not configured yet. Add the EmailJS service, template and public key to frontend/.env.";
+      return;
+    }
+    feedback.textContent = "Sending complaint…";
+    try {
+      const payload = new FormData();
+      payload.append("service_id", emailJsServiceId);
+      payload.append("template_id", emailJsTemplateId);
+      payload.append("user_id", emailJsPublicKey);
+      payload.append("to_email", complaintRecipient);
+      payload.append("location", location);
+      payload.append("message", message);
+      payload.append("image_names", Array.from(imageInput.files ?? []).map((image) => image.name).join(", ") || "No images attached");
+      for (const image of Array.from(imageInput.files ?? [])) payload.append("waste_images", image);
+      const emailResponse = await fetch("https://api.emailjs.com/api/v1.0/email/send-form", {
+        method: "POST",
+        body: payload,
+      });
+      if (!emailResponse.ok) {
+        const reason = (await emailResponse.text()).trim();
+        throw new Error(reason || "EmailJS rejected the complaint. Check your service, template and public key.");
+      }
+      feedback.textContent = "Complaint sent successfully.";
+      form.reset();
+    } catch (error) {
+      feedback.textContent = `Could not submit complaint: ${error instanceof Error ? error.message : "please try again."}`;
+    }
+  };
   document.querySelector<HTMLFormElement>("#report-form")!.onsubmit = (event) => {
     event.preventDefault();
     const type = document.querySelector<HTMLSelectElement>("#report-type")!.value;
@@ -676,8 +713,8 @@ function showSearchResult(area: ChennaiArea): void {
   document.querySelector<HTMLButtonElement>("#yearly-button")!.onclick = () => showYearControls(area);
 }
 
-function showYearControls(area: ChennaiArea): void {
-  const controls = document.querySelector<HTMLDivElement>("#yearly-controls")!;
+function showYearControls(area: ChennaiArea, target = "#yearly-controls"): void {
+  const controls = document.querySelector<HTMLDivElement>(target)!;
   const yearOptions = Array.from({ length: 26 }, (_, index) => 2000 + index)
     .map((year) => `<option value="${year}">${year}</option>`).join("");
   controls.innerHTML = `
@@ -697,12 +734,12 @@ function showYearControls(area: ChennaiArea): void {
       controls.insertAdjacentHTML("beforeend", '<small class="year-error">Choose two or three different years.</small>');
       return;
     }
-    renderYearlyComparison(area, uniqueYears.sort((a, b) => a - b));
+    renderYearlyComparison(area, uniqueYears.sort((a, b) => a - b), target);
   };
 }
 
-function renderYearlyComparison(area: ChennaiArea, years: number[]): void {
-  const controls = document.querySelector<HTMLDivElement>("#yearly-controls")!;
+function renderYearlyComparison(area: ChennaiArea, years: number[], target = "#yearly-controls"): void {
+  const controls = document.querySelector<HTMLDivElement>(target)!;
   const baseWaste = area.category === "illegal" ? 18 + area.name.length % 8 : 0;
   const values = years.map((year, index) => ({
     year,
