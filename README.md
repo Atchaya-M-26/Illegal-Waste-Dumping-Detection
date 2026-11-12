@@ -12,11 +12,11 @@ pip install -r requirements.txt
 uvicorn backend.main:app --reload
 ```
 
-The normal browser frontend is in [frontend-web](./frontend-web). It does not
+The normal browser frontend is in [frontend](./frontend). It does not
 use Streamlit:
 
 ```powershell
-cd frontend-web
+cd frontend
 npm install
 npm run dev
 ```
@@ -31,9 +31,6 @@ waste) and Perungudi (approximately 250 acres, including approximately 225
 acres historically used for dumping) are shown once each as the two major
 municipal disposal sites. These entries are informational and should be
 validated against current municipal records before operational use.
-
-The older Streamlit frontend remains available with
-`streamlit run frontend/app.py`, but it is no longer the recommended interface.
 
 ## Frontend demo login
 

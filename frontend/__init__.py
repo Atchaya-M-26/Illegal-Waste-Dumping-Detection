@@ -1,1 +1,0 @@
-"""WasteWatch frontend package."""
