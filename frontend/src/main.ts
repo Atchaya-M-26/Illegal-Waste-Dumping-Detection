@@ -32,6 +32,8 @@ const locations: Location[] = [
 
 const demoEmail = "admin";
 const demoPassword = "admin123";
+type GeneratedReport = { filename: string; url: string; type: string; area: string };
+const generatedReports: GeneratedReport[] = [];
 let selected = locations[0];
 let map: L.Map | undefined;
 let searchedArea: ChennaiArea | undefined;
@@ -132,6 +134,17 @@ function dashboardSidebar(active: Page): string {
     </header>`;
 }
 
+function renderLanding(): void {
+  app.innerHTML = `
+    <main class="landing-shell">
+      <header class="landing-header"><div class="landing-brand"><span>🌿</span><b>GeoWaste<span>AI</span></b></div><button id="landing-login" class="landing-login">Admin sign in <span>→</span></button></header>
+      <section class="landing-hero"><div class="landing-copy"><p class="eyebrow">CHENNAI / COMMUNITY WASTE INTELLIGENCE</p><h1>Cleaner places start with <em>seeing the problem.</em></h1><p class="landing-lead">GeoWasteAI brings reported dumping locations, satellite context and practical response steps into one clear workspace for Chennai.</p><div class="landing-actions"><button id="hero-login" class="landing-primary">Open monitoring workspace <span>→</span></button><span class="landing-note">Built for faster local action</span></div><div class="landing-stats"><div><b>14</b><span>locations mapped</span></div><div><b>12</b><span>reported areas</span></div><div><b>5</b><span>priority zones</span></div></div></div><div class="landing-visual"><div class="landing-orbit orbit-one"></div><div class="landing-orbit orbit-two"></div><div class="landing-map-frame"><img class="landing-aerial-image" src="/chennai-aerial.jpg" alt="Aerial view of Chennai" /><div class="landing-map-label"><span>CHENNAI / AERIAL VIEW</span><b>One city, shared responsibility</b><small>See the places we can keep cleaner</small></div></div></div></section>
+      <section class="landing-features"><article><span class="feature-icon green-icon">⌖</span><div><b>Locate the issue</b><p>Explore reported dumping areas and official disposal sites across Chennai.</p></div></article><article><span class="feature-icon orange-icon">↗</span><div><b>See change over time</b><p>Compare year-by-year waste footprints and identify areas growing fastest.</p></div></article><article><span class="feature-icon blue-icon">✦</span><div><b>Move to action</b><p>Share a complaint, call the official number and coordinate the next step.</p></div></article></section><footer class="landing-footer">GeoWasteAI · Chennai waste monitoring workspace</footer>
+    </main>`;
+  document.querySelector<HTMLButtonElement>("#landing-login")!.onclick = renderLogin;
+  document.querySelector<HTMLButtonElement>("#hero-login")!.onclick = renderLogin;
+}
+
 function renderLogin(): void {
   app.innerHTML = `
     <main class="auth-shell">
@@ -139,9 +152,9 @@ function renderLogin(): void {
         <div class="eyebrow">SATELLITE INTELLIGENCE PLATFORM</div>
         <h1>See the waste.<br><em>Change the future.</em></h1>
         <p>WasteWatch helps cities find, track, and act on illegal dumping with AI-powered satellite monitoring.</p>
-        <div class="visual-card"><div class="scan-line"></div><span>AI CHANGE DETECTION • DEMO VIEW</span><strong>WASTE<br>HOTSPOT</strong></div>
       </section>
       <section class="login-card">
+        <button id="back-landing" class="landing-back">← Public landing</button>
         <div class="brand">${icon("✦")} WASTEWATCH</div>
         <h2>Welcome back</h2><p class="muted">Sign in to your monitoring workspace</p>
         <form id="login-form">
@@ -150,7 +163,6 @@ function renderLogin(): void {
           <button class="primary wide">Enter dashboard <span>→</span></button>
           <div id="login-error" class="error"></div>
         </form>
-        <div class="demo-box"><b>Demo access</b><br><span>ID</span> ${demoEmail}<br><span>Password</span> ${demoPassword}</div>
       </section>
     </main>`;
   document.querySelector<HTMLFormElement>("#login-form")!.onsubmit = (event) => {
@@ -160,6 +172,7 @@ function renderLogin(): void {
     if (email === demoEmail && password === demoPassword) renderDashboard();
     else document.querySelector<HTMLDivElement>("#login-error")!.textContent = "Invalid demo credentials.";
   };
+  document.querySelector<HTMLButtonElement>("#back-landing")!.onclick = renderLanding;
 }
 
 function trendSvg(values: number[]): string {
@@ -213,7 +226,7 @@ function chennaiAreaRows(areas: ChennaiArea[], category: "legal" | "illegal"): s
 }
 
 function bindAppNav(): void {
-  document.querySelector<HTMLButtonElement>("#logout")!.onclick = renderLogin;
+  document.querySelector<HTMLButtonElement>("#logout")!.onclick = renderLanding;
   document.querySelector<HTMLButtonElement>("#overview-nav")!.onclick = renderDashboard;
   document.querySelector<HTMLButtonElement>("#map-nav")!.onclick = renderMapPage;
   document.querySelector<HTMLButtonElement>("#sites-nav")!.onclick = () => renderSitesPage("all");
@@ -567,7 +580,7 @@ function renderReportsPage(): void {
     </section>
     <section class="panel report-generator"><div class="report-art"><div class="report-leaf">🌿</div><svg viewBox="0 0 180 190" role="img" aria-label="Report illustration"><rect x="32" y="20" width="116" height="150" rx="12" fill="#fff" stroke="#246b32" stroke-width="8"/><rect x="72" y="8" width="36" height="20" rx="8" fill="#246b32"/><path d="M55 133h70M55 148h46" stroke="#8cbd83" stroke-width="7" stroke-linecap="round"/><path d="M57 115v-28h18v28m10 0V69h18v46m10 0V55h18v60" fill="#83c957"/></svg></div>
       <form id="report-form" class="report-form"><p class="eyebrow">EXPORT DATA</p><h2>Generate a project report</h2><label>Report Type<select id="report-type"><option>Waste Dumping Summary</option><option>Official Site Overview</option><option>Reported Location Register</option></select></label><label>Year<select id="report-year"><option>2025</option><option>2024</option><option>2023</option><option>2022</option></select></label><label>Location<select id="report-area"><option>All Chennai</option>${chennaiAreas.map((item) => `<option>${item.neighborhood}</option>`).join("")}</select></label><button class="generate-button">⇩ &nbsp;Generate Report</button><p id="report-feedback" class="report-feedback" aria-live="polite"></p></form></section>
-    <section class="recent-reports"><h2>Recent Reports</h2><div id="recent-report-list"><article class="empty-report"><span class="empty-report-icon">▤</span><div><b>No reports generated yet</b><small>Generated CSV reports will appear here after download.</small></div></article></div></section>
+    <section class="recent-reports"><h2>Recent Reports</h2><div id="recent-report-list">${generatedReports.length ? generatedReports.map((report) => `<a class="recent-report" href="${report.url}" target="_blank" rel="noreferrer" download="${report.filename}"><span class="pdf-icon">CSV</span><div><b>${report.filename}</b><small>${report.type} · ${report.area} · Click to open</small></div><span class="recent-download">↗</span></a>`).join("") : '<article class="empty-report"><span class="empty-report-icon">▤</span><div><b>No reports generated yet</b><small>Generated CSV reports will appear here after download.</small></div></article>'}</div></section>
   </main></div>`;
   bindAppNav();
   document.querySelector<HTMLFormElement>("#complaint-form")!.onsubmit = async (event) => {
@@ -637,9 +650,11 @@ function renderReportsPage(): void {
     const csv = rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\r\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const fileLabel = type.replaceAll(" ", "_");
-    const anchor = document.createElement("a"); anchor.href = url; anchor.download = `Chennai_${fileLabel}_${year}.csv`; anchor.click(); URL.revokeObjectURL(url);
+    const filename = `Chennai_${fileLabel}_${year}.csv`;
+    generatedReports.unshift({ filename, url, type, area });
+    const anchor = document.createElement("a"); anchor.href = url; anchor.download = filename; anchor.click();
     document.querySelector<HTMLParagraphElement>("#report-feedback")!.textContent = "Report downloaded as CSV.";
-    document.querySelector<HTMLDivElement>("#recent-report-list")!.insertAdjacentHTML("afterbegin", `<article class="recent-report"><span class="pdf-icon">CSV</span><div><b>Chennai_${fileLabel}_${year}.csv</b><small>${type} · ${area} · Just generated</small></div><span class="recent-download">✓</span></article>`);
+    document.querySelector<HTMLDivElement>("#recent-report-list")!.innerHTML = generatedReports.map((report) => `<a class="recent-report" href="${report.url}" target="_blank" rel="noreferrer" download="${report.filename}"><span class="pdf-icon">CSV</span><div><b>${report.filename}</b><small>${report.type} · ${report.area} · Click to open</small></div><span class="recent-download">↗</span></a>`).join("");
   };
 }
 
@@ -715,16 +730,33 @@ function showSearchResult(area: ChennaiArea): void {
 
 function showYearControls(area: ChennaiArea, target = "#yearly-controls"): void {
   const controls = document.querySelector<HTMLDivElement>(target)!;
-  const yearOptions = Array.from({ length: 26 }, (_, index) => 2000 + index)
+  const yearOptions = Array.from({ length: 27 }, (_, index) => 2000 + index)
     .map((year) => `<option value="${year}">${year}</option>`).join("");
   controls.innerHTML = `
     <div class="year-controls">
-      <b>Select two or three comparison years</b>
+      <b>Select years three years apart</b>
       <label>Year 1<select class="comparison-year">${yearOptions}</select></label>
-      <label>Year 2<select class="comparison-year">${yearOptions}</select></label>
-      <label>Year 3 <span class="optional-year">(optional)</span><select class="comparison-year"><option value="">None</option>${yearOptions}</select></label>
+      <label>Year 2<select class="comparison-year" disabled><option value="">Choose Year 1 first</option></select></label>
+      <label>Year 3 <span class="optional-year">(optional)</span><select class="comparison-year" disabled><option value="">Choose Year 2 first</option></select></label>
       <button id="compare-years" class="compare-button">Compare years</button>
     </div>`;
+  const comparisonSelects = Array.from(document.querySelectorAll<HTMLSelectElement>(`${target} .comparison-year`));
+  const updateFollowUpYears = (): void => {
+    const firstYear = Number(comparisonSelects[0].value);
+    const secondYear = firstYear + 3;
+    comparisonSelects[1].innerHTML = secondYear <= 2026
+      ? `<option value="${secondYear}">${secondYear}</option>`
+      : '<option value="">No three-year comparison available</option>';
+    comparisonSelects[1].disabled = secondYear > 2026;
+    const thirdYear = secondYear + 3;
+    comparisonSelects[2].innerHTML = thirdYear <= 2026
+      ? `<option value="">None</option><option value="${thirdYear}">${thirdYear}</option>`
+      : '<option value="">None</option>';
+    comparisonSelects[2].disabled = thirdYear > 2026;
+  };
+  comparisonSelects[0].onchange = updateFollowUpYears;
+  comparisonSelects[1].onchange = updateFollowUpYears;
+  updateFollowUpYears();
   document.querySelector<HTMLButtonElement>("#compare-years")!.onclick = () => {
     const years = Array.from(document.querySelectorAll<HTMLSelectElement>(".comparison-year"))
       .map((select) => Number(select.value))
@@ -740,10 +772,21 @@ function showYearControls(area: ChennaiArea, target = "#yearly-controls"): void 
 
 function renderYearlyComparison(area: ChennaiArea, years: number[], target = "#yearly-controls"): void {
   const controls = document.querySelector<HTMLDivElement>(target)!;
-  const baseWaste = area.category === "illegal" ? 18 + area.name.length % 8 : 0;
+  const baseWaste = area.category === "illegal" ? 120 + area.name.length * 3 : 0;
+  const siteIndex = Math.max(chennaiAreas.indexOf(area), 0);
+  const firstDetectionYear = 2021 + (siteIndex % 3);
+  const latestDetectionYear = 2026;
+  const wasteForYear = (year: number): number => {
+    if (year < firstDetectionYear) return 0;
+    const progress = Math.min((year - firstDetectionYear) / (latestDetectionYear - firstDetectionYear), 1);
+    return Math.round(baseWaste * (0.35 + progress * 0.65));
+  };
   const values = years.map((year, index) => ({
     year,
-    waste: Math.round(baseWaste * (0.62 + index * 0.21)),
+    waste: wasteForYear(year),
+    growth: index === 0 || wasteForYear(year) === 0 || wasteForYear(years[index - 1]) === 0
+      ? 0
+      : Math.round(((wasteForYear(year) / wasteForYear(years[index - 1])) - 1) * 100),
   }));
   const increased = values[values.length - 1].waste > values[0].waste;
   controls.innerHTML = `
@@ -752,15 +795,11 @@ function renderYearlyComparison(area: ChennaiArea, years: number[], target = "#y
       <div class="year-card">
         <div class="year-card-head"><b>${item.year}</b><span>Satellite view</span></div>
         <div id="year-map-${item.year}" class="year-satellite-map"></div>
-        <div class="waste-estimate"><strong>${item.waste} units</strong><small>Estimated waste footprint</small></div>
+        <div class="waste-estimate"><strong>${item.waste ? `${item.waste.toLocaleString()} m²` : "No waste detected"}</strong><small>${item.waste === 0 ? "No footprint detected" : item.growth ? `+${item.growth}% from previous year` : "First detected footprint"}</small></div>
         <div class="year-card-detail"><span>Waste type</span><b>${area.detail}</b></div>
         <div class="year-card-detail"><span>Coordinates</span><b>${area.coordinates[0].toFixed(5)}, ${area.coordinates[1].toFixed(5)}</b></div>
       </div>`).join("")}</div>
-    <div class="comparison-summary"><b>${increased ? "Waste dumping increased across the selected years." : "Waste dumping did not increase across the selected years."}</b><small>These are comparison estimates for the prototype. Confirm with dated imagery and field evidence before enforcement.</small>${increased ? '<button id="report-increase" class="report-increase">Report increased dumping</button>' : ""}</div>`;
-  document.querySelector<HTMLButtonElement>("#report-increase")?.addEventListener("click", () => {
-    const summary = document.querySelector<HTMLDivElement>(".comparison-summary")!;
-    summary.insertAdjacentHTML("beforeend", '<span class="report-sent">Report prepared for review.</span>');
-  });
+    <div class="comparison-summary"><b>${increased ? "Waste dumping increased across the selected years." : "Waste dumping did not increase across the selected years."}</b><small>Call the official number to report the increased dumping directly.</small>${increased ? '<a href="tel:9994070000" class="report-increase">☎ Call official number</a>' : ""}</div>`;
   comparisonMaps.forEach((comparisonMap) => comparisonMap.remove());
   comparisonMaps = years.map((year) => {
     const comparisonMap = L.map(`year-map-${year}`, { zoomControl: false }).setView(area.coordinates, 15);
@@ -768,17 +807,30 @@ function renderYearlyComparison(area: ChennaiArea, years: number[], target = "#y
       "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
       { attribution: "Tiles © Esri", maxZoom: 19 },
     ).addTo(comparisonMap);
-    L.circleMarker(area.coordinates, {
-      radius: 7,
-      color: "#d94747",
-      fillColor: "#e45757",
-      fillOpacity: 0.95,
-      weight: 2,
-    }).bindTooltip(`${area.name} · ${year} comparison`).addTo(comparisonMap);
-    L.rectangle(
-      [[area.coordinates[0] - 0.003, area.coordinates[1] - 0.003], [area.coordinates[0] + 0.003, area.coordinates[1] + 0.003]],
-      { color: "#ff3b30", weight: 2, fillOpacity: 0.1, dashArray: "6 4" },
-    ).addTo(comparisonMap);
+    const value = values.find((item) => item.year === year)!;
+    if (value.waste === 0) return comparisonMap;
+    const siteLabel = `${area.name} ${area.detail}`.toLowerCase();
+    const isLinearCorridor = /canal|nullah|river|marsh/.test(siteLabel);
+    const sideMeters = Math.sqrt(Math.max(value.waste, 1));
+    const latitudeScale = 1 / 111_000;
+    const longitudeScale = 1 / (111_000 * Math.cos(area.coordinates[0] * Math.PI / 180));
+    const latSpan = sideMeters * latitudeScale * (isLinearCorridor ? 1.15 : 0.82);
+    const lonSpan = sideMeters * longitudeScale * (isLinearCorridor ? 2.1 : 0.82);
+    const footprint = [
+      [area.coordinates[0] - latSpan * 0.62, area.coordinates[1] - lonSpan * 0.88],
+      [area.coordinates[0] - latSpan, area.coordinates[1] - lonSpan * 0.18],
+      [area.coordinates[0] - latSpan * 0.42, area.coordinates[1] + lonSpan],
+      [area.coordinates[0] + latSpan * 0.72, area.coordinates[1] + lonSpan * 0.72],
+      [area.coordinates[0] + latSpan, area.coordinates[1] - lonSpan * 0.08],
+      [area.coordinates[0] + latSpan * 0.18, area.coordinates[1] - lonSpan],
+    ] as [number, number][];
+    L.polygon(footprint, {
+      color: "#ff3b30",
+      weight: 3,
+      fillColor: "#ff5a48",
+      fillOpacity: 0.16,
+      dashArray: "7 4",
+    }).bindTooltip(`${area.name} · ${year} · ${value.waste.toLocaleString()} m² footprint`).addTo(comparisonMap);
     return comparisonMap;
   });
 }
@@ -801,4 +853,4 @@ function wireDashboard(): void {
   document.querySelector<HTMLInputElement>("#search")!.onkeydown = (event) => { if (event.key === "Enter") search(); };
 }
 
-renderDashboard();
+renderLanding();
